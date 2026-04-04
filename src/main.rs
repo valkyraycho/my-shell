@@ -1,10 +1,7 @@
-use std::{
-    io::{ErrorKind, Write, stdin, stdout},
-    process::Command,
-};
+use std::io::{Write, stdin, stdout};
 
 use my_shell::{
-    builtins,
+    builtins, executor,
     parser::{ParsedCommand, parse},
 };
 
@@ -25,12 +22,7 @@ fn main() {
                 builtins::run(name, &args);
             }
             ParsedCommand::External { name: cmd, args } => {
-                if let Err(err) = Command::new(cmd).args(&args).status() {
-                    match err.kind() {
-                        ErrorKind::NotFound => eprintln!("{}: command not found", cmd),
-                        _ => eprintln!("{}: {}", cmd, err),
-                    }
-                }
+                executor::run(cmd, &args);
             }
         };
     }

@@ -1,7 +1,7 @@
 use std::env::{self, current_dir, set_current_dir};
 
-pub fn run(name: &str, args: &[&str]) {
-    match name {
+pub fn run(cmd: &str, args: &[&str]) {
+    match cmd {
         "cd" => match args.first() {
             None => {
                 if let Ok(home_dir) = env::var("HOME") {
