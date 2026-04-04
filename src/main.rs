@@ -18,10 +18,10 @@ fn main() {
         match parse(&input) {
             ParsedCommand::Empty => continue,
             ParsedCommand::Exit => break,
-            ParsedCommand::Builtin(SimpleCommand { name, args }) => {
+            ParsedCommand::Builtin(SimpleCommand { name, args, .. }) => {
                 builtins::run(name, &args);
             }
-            ParsedCommand::External(SimpleCommand { name, args }) => {
+            ParsedCommand::External(SimpleCommand { name, args, .. }) => {
                 executor::run(name, &args);
             }
             ParsedCommand::Pipeline(commands) => executor::run_pipeline(&commands),
