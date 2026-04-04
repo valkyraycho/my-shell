@@ -5,11 +5,11 @@ use std::{
 
 use crate::parser::SimpleCommand;
 
-pub fn run(cmd: &str, args: &[&str]) {
-    if let Err(err) = Command::new(cmd).args(args).status() {
+pub fn run(command: &SimpleCommand) {
+    if let Err(err) = Command::new(command.name).args(&command.args).status() {
         match err.kind() {
-            ErrorKind::NotFound => eprintln!("{}: command not found", cmd),
-            _ => eprintln!("{}: {}", cmd, err),
+            ErrorKind::NotFound => eprintln!("{}: command not found", command.name),
+            _ => eprintln!("{}: {}", command.name, err),
         }
     }
 }

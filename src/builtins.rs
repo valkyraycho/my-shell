@@ -1,8 +1,10 @@
 use std::env::{self, current_dir, set_current_dir};
 
-pub fn run(cmd: &str, args: &[&str]) {
-    match cmd {
-        "cd" => match args.first() {
+use crate::parser::SimpleCommand;
+
+pub fn run(command: &SimpleCommand) {
+    match command.name {
+        "cd" => match command.args.first() {
             None => {
                 if let Ok(home_dir) = env::var("HOME") {
                     if let Err(e) = set_current_dir(&home_dir) {
@@ -19,7 +21,7 @@ pub fn run(cmd: &str, args: &[&str]) {
             }
         },
         "pwd" => {
-            if !args.is_empty() {
+            if !command.args.is_empty() {
                 eprintln!("pwd: too many arguments");
             } else {
                 match current_dir() {
