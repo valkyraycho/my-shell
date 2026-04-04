@@ -31,3 +31,12 @@ language = "system"
 entry = "cargo clippy -- -D warnings"
 files = "\\.rs$"
 pass_filenames = false
+
+[[repos.hooks]]
+id = "cargo-test"
+name = "cargo test"
+language = "system"
+entry = "cargo test"
+files = "\\.rs$"
+pass_filenames = false
+stages = ["pre-push"]

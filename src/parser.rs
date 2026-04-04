@@ -48,14 +48,29 @@ fn parse_single_command(input: &str) -> ParsedCommand<'_> {
 }
 
 fn parse_simple_command(input: &str) -> SimpleCommand<'_> {
-    let mut elements = input.split_whitespace();
-    let (cmd, args) = (elements.next().unwrap(), elements.collect::<Vec<&str>>());
+    let mut args = Vec::new();
+    let mut tokens = input.split_whitespace();
+    let name = tokens.next().unwrap();
+
+    let mut stdin_redirect = None;
+    let mut stdout_redirect = None;
+    let mut append_redirect = None;
+
+    while let Some(token) = tokens.next() {
+        match token {
+            ">>" => append_redirect = tokens.next(),
+            "<" => stdin_redirect = tokens.next(),
+            ">" => stdout_redirect = tokens.next(),
+            _ => args.push(token),
+        }
+    }
+
     SimpleCommand {
-        name: cmd,
+        name,
         args,
-        stdin_redirect: None,
-        stdout_redirect: None,
-        append_redirect: None,
+        stdin_redirect,
+        stdout_redirect,
+        append_redirect,
     }
 }
 
