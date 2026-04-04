@@ -1,4 +1,5 @@
 use std::{
+    fs::File,
     io::ErrorKind,
     process::{Child, ChildStdout, Command, Stdio},
 };
@@ -6,7 +7,15 @@ use std::{
 use crate::parser::SimpleCommand;
 
 pub fn run(command: &SimpleCommand) {
-    if let Err(err) = Command::new(command.name).args(&command.args).status() {
+    let mut cmd = Command::new(command.name);
+    cmd.args(&command.args);
+
+    if let Err(e) = apply_redirects(&mut cmd, command) {
+        eprintln!("{}", e);
+        return;
+    }
+
+    if let Err(err) = cmd.status() {
         match err.kind() {
             ErrorKind::NotFound => eprintln!("{}: command not found", command.name),
             _ => eprintln!("{}: {}", command.name, err),
@@ -14,30 +23,54 @@ pub fn run(command: &SimpleCommand) {
     }
 }
 
+fn apply_redirects(cmd: &mut Command, command: &SimpleCommand) -> Result<(), String> {
+    if let Some(path) = command.stdin_redirect {
+        let file = File::open(path).map_err(|e| format!("{}: {}", path, e))?;
+        cmd.stdin(Stdio::from(file));
+    }
+    if let Some(path) = command.stdout_redirect {
+        let file = File::create(path).map_err(|e| format!("{}: {}", path, e))?;
+        cmd.stdout(Stdio::from(file));
+    }
+    if let Some(path) = command.append_redirect {
+        let file = File::options()
+            .append(true)
+            .create(true)
+            .open(path)
+            .map_err(|e| format!("{}: {}", path, e))?;
+        cmd.stdout(Stdio::from(file));
+    }
+    Ok(())
+}
 pub fn run_pipeline(commands: &[SimpleCommand]) {
     let mut previous_stdout: Option<ChildStdout> = None;
     let mut children: Vec<Child> = Vec::new();
 
-    for (i, cmd) in commands.iter().enumerate() {
+    for (i, command) in commands.iter().enumerate() {
         let is_last = i == commands.len() - 1;
-        let mut command = Command::new(cmd.name);
-        command.args(&cmd.args);
+        let mut cmd = Command::new(command.name);
+        cmd.args(&command.args);
 
         if let Some(output) = previous_stdout.take() {
-            command.stdin(Stdio::from(output));
+            cmd.stdin(Stdio::from(output));
         }
 
         if !is_last {
-            command.stdout(Stdio::piped());
+            cmd.stdout(Stdio::piped());
         }
 
-        match command.spawn() {
+        if let Err(e) = apply_redirects(&mut cmd, command) {
+            eprintln!("{}", e);
+            return;
+        }
+
+        match cmd.spawn() {
             Ok(mut child) => {
                 previous_stdout = child.stdout.take();
                 children.push(child);
             }
             Err(e) => {
-                eprintln!("{}: {}", cmd.name, e);
+                eprintln!("{}: {}", command.name, e);
                 return;
             }
         }
