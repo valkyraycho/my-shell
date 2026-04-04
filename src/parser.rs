@@ -1,8 +1,14 @@
 pub enum ParsedCommand<'a> {
     Empty,
     Exit,
-    Builtin { name: &'a str, args: Vec<&'a str> },
-    External { name: &'a str, args: Vec<&'a str> },
+    Builtin(SimpleCommand<'a>),
+    External(SimpleCommand<'a>),
+    Pipeline(Vec<SimpleCommand<'a>>),
+}
+
+pub struct SimpleCommand<'a> {
+    pub name: &'a str,
+    pub args: Vec<&'a str>,
 }
 
 pub fn parse(input: &str) -> ParsedCommand<'_> {
@@ -12,14 +18,14 @@ pub fn parse(input: &str) -> ParsedCommand<'_> {
     match command {
         None => ParsedCommand::Empty,
         Some("exit") => ParsedCommand::Exit,
-        Some(cmd) if is_builtin(cmd) => ParsedCommand::Builtin {
+        Some(cmd) if is_builtin(cmd) => ParsedCommand::Builtin(SimpleCommand {
             name: cmd,
             args: arguments,
-        },
-        Some(cmd) => ParsedCommand::External {
+        }),
+        Some(cmd) => ParsedCommand::External(SimpleCommand {
             name: cmd,
             args: arguments,
-        },
+        }),
     }
 }
 

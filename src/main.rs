@@ -2,7 +2,7 @@ use std::io::{Write, stdin, stdout};
 
 use my_shell::{
     builtins, executor,
-    parser::{ParsedCommand, parse},
+    parser::{ParsedCommand, SimpleCommand, parse},
 };
 
 fn main() {
@@ -18,12 +18,13 @@ fn main() {
         match parse(&input) {
             ParsedCommand::Empty => continue,
             ParsedCommand::Exit => break,
-            ParsedCommand::Builtin { name, args } => {
+            ParsedCommand::Builtin(SimpleCommand { name, args }) => {
                 builtins::run(name, &args);
             }
-            ParsedCommand::External { name: cmd, args } => {
-                executor::run(cmd, &args);
+            ParsedCommand::External(SimpleCommand { name, args }) => {
+                executor::run(name, &args);
             }
+            _ => unimplemented!(),
         };
     }
 }
