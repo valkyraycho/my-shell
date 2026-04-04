@@ -18,10 +18,16 @@ pub fn run(cmd: &str, args: &[&str]) {
                 }
             }
         },
-        "pwd" => match current_dir() {
-            Ok(cur_dir) => println!("{}", cur_dir.display()),
-            Err(e) => eprintln!("pwd: {}", e),
-        },
+        "pwd" => {
+            if !args.is_empty() {
+                eprintln!("pwd: too many arguments");
+            } else {
+                match current_dir() {
+                    Ok(cur_dir) => println!("{}", cur_dir.display()),
+                    Err(e) => eprintln!("pwd: {}", e),
+                }
+            }
+        }
         _ => unimplemented!(),
     }
 }
