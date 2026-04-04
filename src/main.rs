@@ -24,7 +24,7 @@ fn main() {
             ParsedCommand::External(SimpleCommand { name, args }) => {
                 executor::run(name, &args);
             }
-            _ => unimplemented!(),
+            ParsedCommand::Pipeline(commands) => executor::run_pipeline(&commands),
         };
     }
 }
