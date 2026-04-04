@@ -1,6 +1,6 @@
 use std::{
     env::{self, current_dir, set_current_dir},
-    io::{Write, stdin, stdout},
+    io::{ErrorKind, Write, stdin, stdout},
     process::Command,
 };
 
@@ -20,19 +20,34 @@ fn main() {
         match command {
             None => continue,
             Some("cd") => match arguments.first() {
-                None => set_current_dir(env::var("HOME").expect("HOME is not set"))
-                    .expect("failed to change directory"),
-                Some(path) => set_current_dir(path).expect("failed to change directory"),
+                None => {
+                    if let Ok(home_dir) = env::var("HOME") {
+                        if let Err(e) = set_current_dir(&home_dir) {
+                            eprintln!("cd: {}: {}", home_dir, e)
+                        }
+                    } else {
+                        eprintln!("$HOME is not set")
+                    }
+                }
+                Some(path) => {
+                    if let Err(e) = set_current_dir(path) {
+                        eprintln!("cd: {}: {}", path, e)
+                    }
+                }
             },
-            Some("pwd") => {
-                println!("{}", current_dir().expect("failed to get cwd").display());
-            }
+            Some("pwd") => match current_dir() {
+                Ok(cur_dir) => println!("{}", cur_dir.display()),
+                Err(e) => eprintln!("pwd: {}", e),
+            },
             Some("exit") => break,
             _ => {
-                Command::new(command.unwrap())
-                    .args(&arguments)
-                    .status()
-                    .expect("failed");
+                let cmd = command.unwrap();
+                if let Err(err) = Command::new(cmd).args(&arguments).status() {
+                    match err.kind() {
+                        ErrorKind::NotFound => eprintln!("{}: command not found", cmd),
+                        _ => eprintln!("{}: {}", cmd, err),
+                    }
+                }
             }
         };
     }
