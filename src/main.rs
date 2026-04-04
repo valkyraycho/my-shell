@@ -4,6 +4,8 @@ use std::{
     process::Command,
 };
 
+use my_shell::parser::{ParsedCommand, parse};
+
 fn main() {
     let mut input = String::new();
     loop {
@@ -14,12 +16,10 @@ fn main() {
             break;
         };
 
-        let mut elements = input.split_whitespace();
-        let (command, arguments) = (elements.next(), elements.collect::<Vec<&str>>());
-
-        match command {
-            None => continue,
-            Some("cd") => match arguments.first() {
+        match parse(&input) {
+            ParsedCommand::Empty => continue,
+            ParsedCommand::Exit => break,
+            ParsedCommand::Builtin { name: "cd", args } => match args.first() {
                 None => {
                     if let Ok(home_dir) = env::var("HOME") {
                         if let Err(e) = set_current_dir(&home_dir) {
@@ -35,20 +35,22 @@ fn main() {
                     }
                 }
             },
-            Some("pwd") => match current_dir() {
+            ParsedCommand::Builtin {
+                name: "pwd",
+                args: _args,
+            } => match current_dir() {
                 Ok(cur_dir) => println!("{}", cur_dir.display()),
                 Err(e) => eprintln!("pwd: {}", e),
             },
-            Some("exit") => break,
-            _ => {
-                let cmd = command.unwrap();
-                if let Err(err) = Command::new(cmd).args(&arguments).status() {
+            ParsedCommand::External { name: cmd, args } => {
+                if let Err(err) = Command::new(cmd).args(&args).status() {
                     match err.kind() {
                         ErrorKind::NotFound => eprintln!("{}: command not found", cmd),
                         _ => eprintln!("{}: {}", cmd, err),
                     }
                 }
             }
+            _ => unimplemented!(),
         };
     }
 }
