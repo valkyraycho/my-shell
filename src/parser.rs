@@ -61,10 +61,10 @@ fn parse_simple_command(input: &str) -> SimpleCommand {
 
     while let Some(token) = tokens.next() {
         match token.as_str() {
-            ">>" => append_redirect = tokens.next(),
-            "<" => stdin_redirect = tokens.next(),
-            ">" => stdout_redirect = tokens.next(),
-            _ => args.push(token),
+            ">>" => append_redirect = tokens.next().map(expand_tilde),
+            "<" => stdin_redirect = tokens.next().map(expand_tilde),
+            ">" => stdout_redirect = tokens.next().map(expand_tilde),
+            _ => args.push(expand_tilde(token)),
         }
     }
 
@@ -74,6 +74,15 @@ fn parse_simple_command(input: &str) -> SimpleCommand {
         stdin_redirect,
         stdout_redirect,
         append_redirect,
+    }
+}
+
+fn expand_tilde(token: String) -> String {
+    if token == "~" || token.starts_with("~/") {
+        let home = std::env::var("HOME").unwrap();
+        token.replacen("~", &home, 1)
+    } else {
+        token
     }
 }
 
@@ -331,6 +340,51 @@ mod tests {
                 stdout_redirect: Some("my file.txt".to_string()),
                 append_redirect: None,
             })
+        );
+    }
+
+    // === Tilde Expansion ===
+
+    #[test]
+    fn test_tilde_as_argument() {
+        let home = std::env::var("HOME").unwrap();
+        assert_eq!(
+            parse("cd ~"),
+            ParsedCommand::Builtin(simple("cd", vec![&home]))
+        );
+    }
+
+    #[test]
+    fn test_tilde_with_path() {
+        let home = std::env::var("HOME").unwrap();
+        let expected = format!("{}/projects", home);
+        assert_eq!(
+            parse("ls ~/projects"),
+            ParsedCommand::External(simple("ls", vec![&expected]))
+        );
+    }
+
+    #[test]
+    fn test_tilde_in_redirect() {
+        let home = std::env::var("HOME").unwrap();
+        let expected = format!("{}/out.txt", home);
+        assert_eq!(
+            parse("echo hello > ~/out.txt"),
+            ParsedCommand::External(SimpleCommand {
+                name: "echo".to_string(),
+                args: vec!["hello".to_string()],
+                stdin_redirect: None,
+                stdout_redirect: Some(expected),
+                append_redirect: None,
+            })
+        );
+    }
+
+    #[test]
+    fn test_tilde_not_at_start() {
+        assert_eq!(
+            parse("echo foo~bar"),
+            ParsedCommand::External(simple("echo", vec!["foo~bar"]))
         );
     }
 }
