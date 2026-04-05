@@ -6,19 +6,27 @@ use std::{
 
 use crate::parser::SimpleCommand;
 
-pub fn run(command: &SimpleCommand) {
+pub fn run(command: &SimpleCommand) -> i32 {
     let mut cmd = Command::new(&command.name);
     cmd.args(&command.args);
 
     if let Err(e) = apply_redirects(&mut cmd, command) {
         eprintln!("{}", e);
-        return;
+        return 1;
     }
 
-    if let Err(err) = cmd.status() {
-        match err.kind() {
-            ErrorKind::NotFound => eprintln!("{}: command not found", command.name),
-            _ => eprintln!("{}: {}", command.name, err),
+    match cmd.status() {
+        Ok(status) => status.code().unwrap_or(1),
+        Err(e) => {
+            match e.kind() {
+                ErrorKind::NotFound => {
+                    eprintln!("{}: command not found", command.name);
+                }
+                _ => {
+                    eprintln!("{}: {}", command.name, e);
+                }
+            }
+            1
         }
     }
 }
@@ -42,9 +50,10 @@ fn apply_redirects(cmd: &mut Command, command: &SimpleCommand) -> Result<(), Str
     }
     Ok(())
 }
-pub fn run_pipeline(commands: &[SimpleCommand]) {
+pub fn run_pipeline(commands: &[SimpleCommand]) -> i32 {
     let mut previous_stdout: Option<ChildStdout> = None;
     let mut children: Vec<Child> = Vec::new();
+    let mut last_status = 0;
 
     for (i, command) in commands.iter().enumerate() {
         let is_last = i == commands.len() - 1;
@@ -61,7 +70,7 @@ pub fn run_pipeline(commands: &[SimpleCommand]) {
 
         if let Err(e) = apply_redirects(&mut cmd, command) {
             eprintln!("{}", e);
-            return;
+            return 1;
         }
 
         match cmd.spawn() {
@@ -71,12 +80,13 @@ pub fn run_pipeline(commands: &[SimpleCommand]) {
             }
             Err(e) => {
                 eprintln!("{}: {}", command.name, e);
-                return;
+                return 1;
             }
         }
     }
 
     for child in &mut children {
-        let _ = child.wait();
+        last_status = child.wait().ok().and_then(|s| s.code()).unwrap_or(1);
     }
+    last_status
 }

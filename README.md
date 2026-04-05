@@ -11,7 +11,9 @@ A Unix shell built from scratch in Rust.
 - **I/O redirection** — `>`, `<`, `>>` for redirecting input and output
 - **Signal handling** — Ctrl-C kills running commands, not the shell
 - **Quoted arguments** — single and double quote support (e.g. `echo "hello world"`)
-- **Line editing** — arrow key history, cursor movement via rustyline
+- **Logical operators** — `&&`, `||`, and `;` for conditional and sequential execution
+- **Tilde expansion** — `~` expands to `$HOME`
+- **Line editing** — arrow key history (persisted across sessions), cursor movement via rustyline
 
 ## Getting Started
 
@@ -34,6 +36,14 @@ builtins.rs  executor.rs  lib.rs  main.rs  parser.rs  tokenizer.rs
 > ls -la | grep ".rs" | wc -l
        5
 
+> echo hello && echo world
+hello
+world
+
+> ls /fake || echo "fallback"
+ls: /fake: No such file or directory
+fallback
+
 > exit
 ```
 
@@ -49,8 +59,8 @@ src/
 └── executor.rs   — single command execution and pipeline wiring
 ```
 
-**Tokenizer** walks input character-by-character, handling single/double quotes and whitespace splitting.
+**Tokenizer** walks input character-by-character with lookahead, producing structured tokens (`Word`, `Pipe`, `And`, `Or`, `Semicolon`, `RedirectIn`, `RedirectOut`, `Append`). Handles single/double quotes and multi-character operators (`&&`, `||`, `>>`).
 
-**Parser** splits input on `|`, tokenizes each segment, and classifies commands into `Empty`, `Exit`, `Builtin`, `External`, or `Pipeline` variants.
+**Parser** consumes the token stream in two layers: first splitting by `&&`/`||`/`;` into chained commands, then splitting each chain segment by `|` into pipelines. Each pipeline segment is classified as `Empty`, `Exit`, `Builtin`, `External`, or `Pipeline`.
 
 **Executor** spawns child processes via `std::process::Command`. Pipelines connect consecutive processes by piping `stdout` → `stdin` using OS-level file descriptors. All pipeline stages run concurrently.
