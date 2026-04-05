@@ -3,7 +3,7 @@ use std::env::{self, current_dir, set_current_dir};
 use crate::parser::SimpleCommand;
 
 pub fn run(command: &SimpleCommand) {
-    match command.name {
+    match command.name.as_str() {
         "cd" => match command.args.first() {
             None => {
                 if let Ok(home_dir) = env::var("HOME") {

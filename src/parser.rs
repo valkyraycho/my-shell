@@ -1,22 +1,24 @@
+use crate::tokenizer::tokenize;
+
 #[derive(Debug, PartialEq)]
-pub enum ParsedCommand<'a> {
+pub enum ParsedCommand {
     Empty,
     Exit,
-    Builtin(SimpleCommand<'a>),
-    External(SimpleCommand<'a>),
-    Pipeline(Vec<SimpleCommand<'a>>),
+    Builtin(SimpleCommand),
+    External(SimpleCommand),
+    Pipeline(Vec<SimpleCommand>),
 }
 
 #[derive(Debug, PartialEq)]
-pub struct SimpleCommand<'a> {
-    pub name: &'a str,
-    pub args: Vec<&'a str>,
-    pub stdin_redirect: Option<&'a str>,
-    pub stdout_redirect: Option<&'a str>,
-    pub append_redirect: Option<&'a str>,
+pub struct SimpleCommand {
+    pub name: String,
+    pub args: Vec<String>,
+    pub stdin_redirect: Option<String>,
+    pub stdout_redirect: Option<String>,
+    pub append_redirect: Option<String>,
 }
 
-pub fn parse(input: &str) -> ParsedCommand<'_> {
+pub fn parse(input: &str) -> ParsedCommand {
     if input.trim().is_empty() {
         return ParsedCommand::Empty;
     }
@@ -38,18 +40,19 @@ fn is_builtin(cmd: &str) -> bool {
     matches!(cmd, "cd" | "pwd")
 }
 
-fn parse_single_command(input: &str) -> ParsedCommand<'_> {
+fn parse_single_command(input: &str) -> ParsedCommand {
     let cmd = parse_simple_command(input);
-    match cmd.name {
+    match cmd.name.as_str() {
         "exit" => ParsedCommand::Exit,
         name if is_builtin(name) => ParsedCommand::Builtin(cmd),
         _ => ParsedCommand::External(cmd),
     }
 }
 
-fn parse_simple_command(input: &str) -> SimpleCommand<'_> {
+fn parse_simple_command(input: &str) -> SimpleCommand {
+    let mut tokens = tokenize(input).into_iter();
+
     let mut args = Vec::new();
-    let mut tokens = input.split_whitespace();
     let name = tokens.next().unwrap();
 
     let mut stdin_redirect = None;
@@ -57,7 +60,7 @@ fn parse_simple_command(input: &str) -> SimpleCommand<'_> {
     let mut append_redirect = None;
 
     while let Some(token) = tokens.next() {
-        match token {
+        match token.as_str() {
             ">>" => append_redirect = tokens.next(),
             "<" => stdin_redirect = tokens.next(),
             ">" => stdout_redirect = tokens.next(),
@@ -78,10 +81,10 @@ fn parse_simple_command(input: &str) -> SimpleCommand<'_> {
 mod tests {
     use super::*;
 
-    fn simple<'a>(name: &'a str, args: Vec<&'a str>) -> SimpleCommand<'a> {
+    fn simple(name: &str, args: Vec<&str>) -> SimpleCommand {
         SimpleCommand {
-            name,
-            args,
+            name: name.to_string(),
+            args: args.into_iter().map(String::from).collect(),
             stdin_redirect: None,
             stdout_redirect: None,
             append_redirect: None,
@@ -179,10 +182,10 @@ mod tests {
         assert_eq!(
             parse("echo hello > out.txt"),
             ParsedCommand::External(SimpleCommand {
-                name: "echo",
-                args: vec!["hello"],
+                name: "echo".to_string(),
+                args: vec![String::from("hello")],
                 stdin_redirect: None,
-                stdout_redirect: Some("out.txt"),
+                stdout_redirect: Some("out.txt".to_string()),
                 append_redirect: None,
             })
         );
@@ -193,9 +196,9 @@ mod tests {
         assert_eq!(
             parse("cat < input.txt"),
             ParsedCommand::External(SimpleCommand {
-                name: "cat",
+                name: "cat".to_string(),
                 args: vec![],
-                stdin_redirect: Some("input.txt"),
+                stdin_redirect: Some("input.txt".to_string()),
                 stdout_redirect: None,
                 append_redirect: None,
             })
@@ -207,11 +210,11 @@ mod tests {
         assert_eq!(
             parse("echo hello >> out.txt"),
             ParsedCommand::External(SimpleCommand {
-                name: "echo",
-                args: vec!["hello"],
+                name: "echo".to_string(),
+                args: vec!["hello".to_string()],
                 stdin_redirect: None,
                 stdout_redirect: None,
-                append_redirect: Some("out.txt"),
+                append_redirect: Some("out.txt".to_string()),
             })
         );
     }
@@ -221,10 +224,10 @@ mod tests {
         assert_eq!(
             parse("grep foo < input.txt > output.txt"),
             ParsedCommand::External(SimpleCommand {
-                name: "grep",
-                args: vec!["foo"],
-                stdin_redirect: Some("input.txt"),
-                stdout_redirect: Some("output.txt"),
+                name: "grep".to_string(),
+                args: vec!["foo".to_string()],
+                stdin_redirect: Some("input.txt".to_string()),
+                stdout_redirect: Some("output.txt".to_string()),
                 append_redirect: None,
             })
         );
@@ -235,10 +238,10 @@ mod tests {
         assert_eq!(
             parse("ls -la -h > out.txt"),
             ParsedCommand::External(SimpleCommand {
-                name: "ls",
-                args: vec!["-la", "-h"],
+                name: "ls".to_string(),
+                args: vec!["-la".to_string(), "-h".to_string()],
                 stdin_redirect: None,
-                stdout_redirect: Some("out.txt"),
+                stdout_redirect: Some("out.txt".to_string()),
                 append_redirect: None,
             })
         );
@@ -250,20 +253,84 @@ mod tests {
             parse("cat < input.txt | grep foo > output.txt"),
             ParsedCommand::Pipeline(vec![
                 SimpleCommand {
-                    name: "cat",
+                    name: "cat".to_string(),
                     args: vec![],
-                    stdin_redirect: Some("input.txt"),
+                    stdin_redirect: Some("input.txt".to_string()),
                     stdout_redirect: None,
                     append_redirect: None,
                 },
                 SimpleCommand {
-                    name: "grep",
-                    args: vec!["foo"],
+                    name: "grep".to_string(),
+                    args: vec!["foo".to_string()],
                     stdin_redirect: None,
-                    stdout_redirect: Some("output.txt"),
+                    stdout_redirect: Some("output.txt".to_string()),
                     append_redirect: None,
                 },
             ])
+        );
+    }
+
+    // === Quoted Arguments ===
+
+    #[test]
+    fn test_double_quoted_argument() {
+        assert_eq!(
+            parse("echo \"hello world\""),
+            ParsedCommand::External(simple("echo", vec!["hello world"]))
+        );
+    }
+
+    #[test]
+    fn test_single_quoted_argument() {
+        assert_eq!(
+            parse("echo 'hello world'"),
+            ParsedCommand::External(simple("echo", vec!["hello world"]))
+        );
+    }
+
+    #[test]
+    fn test_multiple_quoted_arguments() {
+        assert_eq!(
+            parse("echo \"hello\" \"world\""),
+            ParsedCommand::External(simple("echo", vec!["hello", "world"]))
+        );
+    }
+
+    #[test]
+    fn test_mixed_quoted_and_unquoted() {
+        assert_eq!(
+            parse("echo hello \"big world\""),
+            ParsedCommand::External(simple("echo", vec!["hello", "big world"]))
+        );
+    }
+
+    #[test]
+    fn test_single_quotes_preserve_double_quotes() {
+        assert_eq!(
+            parse("echo 'hello \"world\"'"),
+            ParsedCommand::External(simple("echo", vec!["hello \"world\""]))
+        );
+    }
+
+    #[test]
+    fn test_double_quotes_preserve_single_quotes() {
+        assert_eq!(
+            parse("echo \"hello 'world'\""),
+            ParsedCommand::External(simple("echo", vec!["hello 'world'"]))
+        );
+    }
+
+    #[test]
+    fn test_quoted_redirect_filename() {
+        assert_eq!(
+            parse("echo hello > \"my file.txt\""),
+            ParsedCommand::External(SimpleCommand {
+                name: "echo".to_string(),
+                args: vec!["hello".to_string()],
+                stdin_redirect: None,
+                stdout_redirect: Some("my file.txt".to_string()),
+                append_redirect: None,
+            })
         );
     }
 }

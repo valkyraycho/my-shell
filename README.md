@@ -1,6 +1,6 @@
 # my-shell
 
-A Unix shell built from scratch in Rust using only the standard library. No external dependencies.
+A Unix shell built from scratch in Rust.
 
 ## Features
 
@@ -42,7 +42,8 @@ builtins.rs  executor.rs  lib.rs  main.rs  parser.rs
 src/
 ├── main.rs       — REPL loop and command dispatch
 ├── lib.rs        — module re-exports
-├── parser.rs     — tokenizer, command classification, pipeline splitting
+├── tokenizer.rs  — character-level tokenizer with quote handling
+├── parser.rs     — command classification, pipeline splitting
 ├── builtins.rs   — cd, pwd
 └── executor.rs   — single command execution and pipeline wiring
 ```

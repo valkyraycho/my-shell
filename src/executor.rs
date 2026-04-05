@@ -7,7 +7,7 @@ use std::{
 use crate::parser::SimpleCommand;
 
 pub fn run(command: &SimpleCommand) {
-    let mut cmd = Command::new(command.name);
+    let mut cmd = Command::new(&command.name);
     cmd.args(&command.args);
 
     if let Err(e) = apply_redirects(&mut cmd, command) {
@@ -24,15 +24,15 @@ pub fn run(command: &SimpleCommand) {
 }
 
 fn apply_redirects(cmd: &mut Command, command: &SimpleCommand) -> Result<(), String> {
-    if let Some(path) = command.stdin_redirect {
+    if let Some(path) = &command.stdin_redirect {
         let file = File::open(path).map_err(|e| format!("{}: {}", path, e))?;
         cmd.stdin(Stdio::from(file));
     }
-    if let Some(path) = command.stdout_redirect {
+    if let Some(path) = &command.stdout_redirect {
         let file = File::create(path).map_err(|e| format!("{}: {}", path, e))?;
         cmd.stdout(Stdio::from(file));
     }
-    if let Some(path) = command.append_redirect {
+    if let Some(path) = &command.append_redirect {
         let file = File::options()
             .append(true)
             .create(true)
@@ -48,7 +48,7 @@ pub fn run_pipeline(commands: &[SimpleCommand]) {
 
     for (i, command) in commands.iter().enumerate() {
         let is_last = i == commands.len() - 1;
-        let mut cmd = Command::new(command.name);
+        let mut cmd = Command::new(&command.name);
         cmd.args(&command.args);
 
         if let Some(output) = previous_stdout.take() {
