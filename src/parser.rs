@@ -89,7 +89,7 @@ fn parse_segment(segment: Vec<Token>) -> ParsedCommand {
 }
 
 fn is_builtin(cmd: &str) -> bool {
-    matches!(cmd, "cd" | "pwd")
+    matches!(cmd, "cd" | "pwd" | "export")
 }
 
 fn parse_single_command(tokens: &[Token]) -> ParsedCommand {
@@ -113,24 +113,24 @@ fn parse_simple_command(tokens: &[Token]) -> SimpleCommand {
         match token {
             Token::RedirectIn => {
                 if let Some(Token::Word(path)) = tokens_iter.next() {
-                    stdin_redirect = Some(expand_tilde(path.clone()));
+                    stdin_redirect = Some(expand_vars(expand_tilde(path.clone())));
                 }
             }
             Token::RedirectOut => {
                 if let Some(Token::Word(path)) = tokens_iter.next() {
-                    stdout_redirect = Some(expand_tilde(path.clone()));
+                    stdout_redirect = Some(expand_vars(expand_tilde(path.clone())));
                 }
             }
             Token::Append => {
                 if let Some(Token::Word(path)) = tokens_iter.next() {
-                    append_redirect = Some(expand_tilde(path.clone()));
+                    append_redirect = Some(expand_vars(expand_tilde(path.clone())));
                 }
             }
             Token::Word(w) => {
                 if name.is_none() {
                     name = Some(w.clone())
                 } else {
-                    args.push(expand_tilde(w.clone()));
+                    args.push(expand_vars(expand_tilde(w.clone())));
                 }
             }
             _ => unreachable!(),
@@ -152,6 +152,37 @@ fn expand_tilde(token: String) -> String {
     } else {
         token
     }
+}
+
+fn expand_vars(token: String) -> String {
+    let mut result = String::new();
+    let mut chars = token.chars().peekable();
+
+    while let Some(c) = chars.next() {
+        if c == '$' {
+            if chars.peek() == Some(&'?') {
+                chars.next();
+                let status_code = std::env::var("?").unwrap_or_default();
+                result.push_str(&status_code);
+            } else {
+                let mut var_name = String::new();
+                while let Some(&ch) = chars.peek() {
+                    if ch.is_alphanumeric() || ch == '_' {
+                        var_name.push(ch);
+                        chars.next();
+                    } else {
+                        break;
+                    }
+                }
+                let val = std::env::var(&var_name).unwrap_or_default();
+                result.push_str(&val);
+            }
+        } else {
+            result.push(c);
+        }
+    }
+
+    result
 }
 
 #[cfg(test)]
@@ -584,5 +615,80 @@ mod tests {
                 },
             ]
         );
+    }
+
+    // === Environment Variables ===
+
+    #[test]
+    fn test_export_is_builtin() {
+        assert_eq!(
+            parse("export FOO=bar"),
+            single(ParsedCommand::Builtin(simple("export", vec!["FOO=bar"])))
+        );
+    }
+
+    #[test]
+    fn test_var_expansion_in_args() {
+        unsafe { std::env::set_var("TEST_SHELL_VAR", "hello") };
+        assert_eq!(
+            parse("echo $TEST_SHELL_VAR"),
+            single(ParsedCommand::External(simple("echo", vec!["hello"])))
+        );
+        unsafe { std::env::remove_var("TEST_SHELL_VAR") };
+    }
+
+    #[test]
+    fn test_var_expansion_with_surrounding_text() {
+        unsafe { std::env::set_var("TEST_GREETING", "hello") };
+        assert_eq!(
+            parse("echo $TEST_GREETING/world"),
+            single(ParsedCommand::External(simple("echo", vec!["hello/world"])))
+        );
+        unsafe { std::env::remove_var("TEST_GREETING") };
+    }
+
+    #[test]
+    fn test_var_expansion_undefined_var() {
+        assert_eq!(
+            parse("echo $UNDEFINED_VAR_12345"),
+            single(ParsedCommand::External(simple("echo", vec![""])))
+        );
+    }
+
+    #[test]
+    fn test_var_expansion_in_redirect() {
+        unsafe { std::env::set_var("TEST_FILE", "output.txt") };
+        assert_eq!(
+            parse("echo hello > $TEST_FILE"),
+            single(ParsedCommand::External(SimpleCommand {
+                name: "echo".to_string(),
+                args: vec!["hello".to_string()],
+                stdin_redirect: None,
+                stdout_redirect: Some("output.txt".to_string()),
+                append_redirect: None,
+            }))
+        );
+        unsafe { std::env::remove_var("TEST_FILE") };
+    }
+
+    #[test]
+    fn test_var_expansion_exit_status() {
+        unsafe { std::env::set_var("?", "0") };
+        assert_eq!(
+            parse("echo $?"),
+            single(ParsedCommand::External(simple("echo", vec!["0"])))
+        );
+    }
+
+    #[test]
+    fn test_multiple_vars_in_one_arg() {
+        unsafe { std::env::set_var("TEST_FIRST", "hello") };
+        unsafe { std::env::set_var("TEST_SECOND", "world") };
+        assert_eq!(
+            parse("echo $TEST_FIRST/$TEST_SECOND"),
+            single(ParsedCommand::External(simple("echo", vec!["hello/world"])))
+        );
+        unsafe { std::env::remove_var("TEST_FIRST") };
+        unsafe { std::env::remove_var("TEST_SECOND") };
     }
 }

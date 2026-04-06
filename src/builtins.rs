@@ -42,6 +42,22 @@ pub fn run(command: &SimpleCommand) -> i32 {
                 }
             }
         }
+        "export" => {
+            if let Some(arg) = command.args.first() {
+                if let Some((key, value)) = arg.split_once('=') {
+                    unsafe {
+                        std::env::set_var(key, value);
+                    };
+                } else {
+                    eprintln!("export: invalid format, expected KEY=VALUE");
+                    return 1;
+                }
+            } else {
+                eprintln!("export: missing argument");
+                return 1;
+            }
+            0
+        }
         _ => unimplemented!(),
     }
 }

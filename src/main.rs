@@ -33,6 +33,9 @@ fn main() -> Result<()> {
                             last_status = executor::run_pipeline(&cmds)
                         }
                     }
+                    unsafe {
+                        std::env::set_var("?", last_status.to_string());
+                    }
                 }
             }
             Err(rustyline::error::ReadlineError::Interrupted) => continue,
