@@ -130,7 +130,7 @@ fn parse_simple_command(tokens: &[Token]) -> SimpleCommand {
                 if name.is_none() {
                     name = Some(w.clone())
                 } else {
-                    args.push(expand_vars(expand_tilde(w.clone())));
+                    args.extend(expand_glob(expand_vars(expand_tilde(w.clone()))));
                 }
             }
             _ => unreachable!(),
@@ -183,6 +183,25 @@ fn expand_vars(token: String) -> String {
     }
 
     result
+}
+
+fn expand_glob(token: String) -> Vec<String> {
+    if !token.contains('*') && !token.contains('?') {
+        return vec![token];
+    }
+    if let Ok(paths) = glob::glob(&token) {
+        let matches: Vec<String> = paths
+            .filter_map(|entry| entry.ok())
+            .map(|path| path.to_string_lossy().to_string())
+            .collect();
+        if matches.is_empty() {
+            vec![token]
+        } else {
+            matches
+        }
+    } else {
+        vec![token]
+    }
 }
 
 #[cfg(test)]
@@ -690,5 +709,54 @@ mod tests {
         );
         unsafe { std::env::remove_var("TEST_FIRST") };
         unsafe { std::env::remove_var("TEST_SECOND") };
+    }
+
+    // === Glob Expansion ===
+
+    #[test]
+    fn test_glob_expands_wildcard() {
+        // Use src/*.rs which we know exists in this project
+        let result = parse("echo src/*.rs");
+        match &result[0].command {
+            ParsedCommand::External(cmd) => {
+                assert!(cmd.args.len() > 1, "glob should expand to multiple files");
+                assert!(cmd.args.iter().all(|a| a.ends_with(".rs")));
+                assert!(cmd.args.iter().any(|a| a.contains("main.rs")));
+                assert!(cmd.args.iter().any(|a| a.contains("parser.rs")));
+            }
+            _ => panic!("expected External command"),
+        }
+    }
+
+    #[test]
+    fn test_glob_no_match_keeps_literal() {
+        assert_eq!(
+            parse("echo *.xyz_nonexistent"),
+            single(ParsedCommand::External(simple(
+                "echo",
+                vec!["*.xyz_nonexistent"]
+            )))
+        );
+    }
+
+    #[test]
+    fn test_no_glob_without_wildcard() {
+        assert_eq!(
+            parse("echo hello"),
+            single(ParsedCommand::External(simple("echo", vec!["hello"])))
+        );
+    }
+
+    #[test]
+    fn test_glob_mixed_with_normal_args() {
+        let result = parse("echo hello src/*.rs");
+        match &result[0].command {
+            ParsedCommand::External(cmd) => {
+                assert_eq!(cmd.args[0], "hello");
+                assert!(cmd.args.len() > 2, "glob should add more args after hello");
+                assert!(cmd.args[1..].iter().all(|a| a.ends_with(".rs")));
+            }
+            _ => panic!("expected External command"),
+        }
     }
 }
