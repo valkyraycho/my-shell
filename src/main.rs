@@ -1,11 +1,14 @@
 use my_shell::{
-    builtins, executor,
+    builtins,
+    completer::ShellHelper,
+    executor,
     parser::{Operator, ParsedCommand, parse},
 };
-use rustyline::{DefaultEditor, Result};
+use rustyline::{Editor, Result};
 
 fn main() -> Result<()> {
-    let mut rl = DefaultEditor::new().expect("failed to create editor");
+    let mut rl = Editor::new().expect("failed to create editor");
+    rl.set_helper(Some(ShellHelper));
     let history_file = format!("{}/.my_shell_history", std::env::var("HOME").unwrap());
     let _ = rl.load_history(&history_file);
     let mut last_status = 0;
